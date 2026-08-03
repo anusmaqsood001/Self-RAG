@@ -1,13 +1,13 @@
+import os
 from typing import List, TypedDict, Literal
 from pydantic import BaseModel, Field
-
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
-
+from langchain_huggingface import HuggingFaceEmbeddings
 from langgraph.graph import StateGraph, START, END
 from dotenv import load_dotenv
 
@@ -26,11 +26,21 @@ chunks = RecursiveCharacterTextSplitter(
     chunk_size=600, chunk_overlap=150
 ).split_documents(docs)
 
-embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+embeddings = HuggingFaceEmbeddings(
+    model_name="all-MiniLM-L6-v2",
+    model_kwargs={"local_files_only": True}
+)
+
 vector_store = FAISS.from_documents(chunks, embeddings)
 retriever = vector_store.as_retriever(search_kwargs={"k": 4})
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+llm = ChatGoogleGenerativeAI(
+    model="gemini-3.1-flash-lite", # ya gemini-2.0-flash / gemini-3.1-flash-lite
+    google_api_key=os.getenv("GEMINI_API_KEY"),
+    temperature=0.2,
+    max_retries=7,              # Limit hit hone par auto-retry karega
+    request_timeout=70
+)
 
 # -----------------------------
 # Graph State
@@ -38,7 +48,6 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 class State(TypedDict):
     question: str
 
-    # ✅ NEW: what we actually send to vector retriever
     retrieval_query: str
     rewrite_tries: int
 
